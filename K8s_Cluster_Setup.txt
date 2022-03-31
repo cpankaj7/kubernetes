@@ -1,0 +1,291 @@
+***************************************************** Configure yum to download rpm for kubernete related rpm *******************************************
+1. Configure yum repo file
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+EOF
+
+Download kubeadm along with its dependency rpm from yum server
+yum install kubeadm --downloadonly --downloaddir=/window_share/Docker -y
+
+ls -ltr
+
+kubeadm-1.22.4-0.x86_64.rpm
+cri-tools-1.19.0-0.x86_64.rpm
+kubectl-1.22.4-0.x86_64.rpm
+kubelet-1.22.4-0.x86_64.rpm
+kubernetes-cni-0.8.7-0.x86_64.rpm
+
+
+*************************************** Configure yum to download rpm for docker related rpm *************************************************************
+Note : Latest version of docker yet not supported in RHEL 8 whereas podman is lower version
+
+vi /etc/yum.repos.d/docker.repo
+[docker]
+name=Docker (Centos)
+baseurl=https://download.docker.com/linux/centos/8/x86_64/stable/
+enabled=1
+gpgcheck=0
+
+:wq!
+
+Download docker along with its dependency rpm from yum server
+yum install docker-ce --downloadonly --downloaddir=/window_share/Docker -y
+
+ls -ltr
+
+containerd.io-1.4.12-3.1.el8.x86_6
+docker-ce-20.10.11-3.el8.x86_64.rp
+docker-ce-cli-20.10.11-3.el8.x86_6
+docker-ce-rootless-extras-20.10.11
+docker-scan-plugin-0.9.0-3.el8.x86
+libcgroup-0.41-19.el8.x86_64.rpm
+
+**********************************************Letting iptables see bridged traffic *************************************************************************
+
+Note : Make sure that the br_netfilter module is loaded. This can be done by running lsmod | grep br_netfilter. To load it explicitly call sudo modprobe br_netfilter.
+		As a requirement for your Linux Node's iptables to correctly see bridged traffic, you should ensure net.bridge.bridge-nf-call-iptables is set to 1 in your sysctl config, e.g.
+
+
+cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+br_netfilter
+EOF
+
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+
+sysctl --system
+
+
+*************************Configure the Docker daemon, in particular to use systemd for the management of the container’s cgroups. *************************
+
+Note :	1. Current cgroupdriver is not supported in x86_64 / amd64 system architecture. 
+		2. overlay2 is the preferred storage driver for systems running Linux kernel version 4.0 or higher, or RHEL or CentOS using version 3.10.0-514 and above.
+
+sudo mkdir /etc/docker
+cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+
+systemctl daemon-reload
+
+***************************************************************Change selinux permissive or disable**************************************************************
+
+--set permanent
+vi /etc/selinux/config
+SELINUX=permissive
+
+wq!
+
+--set temporary
+setenforce 0
+
+--verify
+getenforce 
+
+********************************************************************Disable swap memory *************************************************************************
+
+--set permanent
+vi /etc/fstab
+#/dev/mapper/rhel-swap   none                    swap    defaults        0 0
+wq!
+
+--set temporary
+swapoff -a
+
+
+****************************************************************Stop local firewall & disable*******************************************************************
+
+systemctl stop firewalld.service
+systemctl disable firewalld.service
+
+****************************************************************Install IP route tc*******************************************************************
+Note : use for routing the network
+
+yum install iproute-tc -y
+
+--set temporary
+# sysctl -w net.ipv4.ip_forward=0
+OR
+# sysctl -w net.ipv4.ip_forward=1
+
+
+--set permanent
+
+Vi /etc/sysctl.conf
+Add one of the following lines to the bottom of the file, depending on whether you’d like Linux IP forwarding to be off or on, respectively. Then, save your changes to this file. The setting will be permanent across reboots.
+
+net.ipv4.ip_forward = 0
+OR
+net.ipv4.ip_forward = 1
+
+After editing the file, you can run the following command to make the changes take effect right away.
+
+# sysctl -p
+
+systemctl status sysctl
+
+*****************************************************First install any container tool like docker ***************************************************************
+
+Install docker to all machine worker/node & master
+
+yum install docker-ce-20.10.11-3.el8.x86_64.rpm docker-ce-cli-20.10.11-3.el8.x86_64.rpm docker-ce-rootless-extras-20.10.11-3.el8.x86_64.rpm docker-scan-plugin-0.9.0-3.el8.x86_64.rpm containerd.io-1.4.12-3.1.el8.x86_64.rpm libcgroup-0.41-19.el8.x86_64.rpm -y
+
+Start & enable docker services
+systemctl start docker.service
+systemctl enable docker.service
+
+
+***************************************************** Install Kubernetes from downloaded rpm *******************************************************************
+Install kubernete (tool kubeadm, kubectl, kubelet, kubernetes-cni, cri-tools)
+yum install kubeadm-1.22.4-0.x86_64.rpm cri-tools-1.19.0-0.x86_64.rpm kubectl-1.22.4-0.x86_64.rpm kubelet-1.22.4-0.x86_64.rpm kubernetes-cni-0.8.7-0.x86_64.rpm -y
+
+Enable the kubelet service
+systemctl enable kubelet.service
+
+************************* Configure Kubernetes Master server ******************************************
+-----BOOTSTRAPPING THE MASTER NODE (IN MASTER)
+
+kubeadm init
+
+or
+
+kubeadm init --pod-network-cidr=10.244.0.0/16
+
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Note : Copy the highlighted key starting with kubeadm join <master_server_ip>:<port> --token .......
+
+kubeadm join 192.168.1.160:6443 --token i0lqc1.qgrcgxz8ty4bf9bs \
+        --discovery-token-ca-cert-hash sha256:8d6e9ee94868468d968d01726bfc807c01f84a2b75d7e849f2802330ccd87124
+
+******************************************************************* Configure network for pod **************************************************************************
+
+kubectl apply -f  https://github.com/cpankaj7/kubernetes/blob/main/kube-flannel-rbac.yml
+kubectl apply -f  https://github.com/cpankaj7/kubernetes/blob/main/kube-flannel-legacy.yml
+
+or 
+
+kubectl apply -f https://github.com/cpankaj7/kubernetes/blob/main/kube-flannel.yml
+
+
+******************************************************************* Run out pass command to nodes / workers **************************************************************************
+-----BOOTSTRAPPING THE WORKER NODE (IN WORKER)
+
+Bootstrap the worker / node by running shared pass key
+
+eg :
+kubeadm join 192.168.1.160:6443 --token i0lqc1.qgrcgxz8ty4bf9bs \
+        --discovery-token-ca-cert-hash sha256:8d6e9ee94868468d968d01726bfc807c01f84a2b75d7e849f2802330ccd87124
+
+***************************************************************************************************************************************************************************************
+kubectl apply -f <filename.yml>
+kubectl delete -f <filename.yml> | <podname> | <deploymentname>
+kubectl get pods | nodes
+
+kubectl exec <podname> -it -c <containername> -- /bin/bash
+kubectl reset
+
+
+docker exec -it 7cc13dcc6074 /bin/bash
+
+
+source <(kubectl completion bash)
+
+kubectl get pods --all-namespaces
+kubectl get svc --all-namespaces
+
+kubectl describe svc/kube-dns -n kube-system
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+**********Install kubectl binary with curl on Linux*****************
+1. Download the latest release with the command:
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+Note:
+To download a specific version, replace the $(curl -L -s https://dl.k8s.io/release/stable.txt) portion of the command with the specific version.
+
+For example, to download version v1.22.0 on Linux, type:
+
+curl -LO https://dl.k8s.io/release/v1.22.0/bin/linux/amd64/kubectl
+
+
+2. Validate the binary (optional) --> Download the kubectl checksum file:
+curl -LO "https://dl.k8s.io/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl.sha256"
+
+Validate the kubectl binary against the checksum file:
+
+echo "$(<kubectl.sha256) kubectl" | sha256sum --check
+If valid, the output is:
+
+kubectl: OK
+If the check fails, sha256 exits with nonzero status and prints output similar to:
+
+kubectl: FAILED
+sha256sum: WARNING: 1 computed checksum did NOT match
+Note: Download the same version of the binary and checksum.
+
+3. Install kubectl
+
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+Note:
+If you do not have root access on the target system, you can still install kubectl to the ~/.local/bin directory:
+
+chmod +x kubectl
+mkdir -p ~/.local/bin/kubectl
+mv ./kubectl ~/.local/bin/kubectl
+# and then add ~/.local/bin/kubectl to $PATH
+Test to ensure the version you installed is up-to-date:
+
+4. kubectl version --client
+
+
+
+***************************************************************************************************************************************************************************************
+
+**********Install kubectl with yum configuration in Linux*****************
+1. Configure yum repo file
+cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+EOF
+
+2. Install kubernete in system
+sudo yum install -y kubectl

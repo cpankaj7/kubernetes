@@ -1,0 +1,81 @@
+3 Components in K8s
+=====================================================
+A. Master
+-----------------------------------------------------
+4 Imp Components
+- API Server			(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+- etcd					(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+- Controller Manager	(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+- Scheduler				(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+
+- Core DNS		(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+- cni driver	(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+
+- Kubelet		(Agent)
+- Docker Enginer	(DeamonD)
+- Kube Proxy	(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+
+- kubeadm
+
+
+B. Worker / Node
+------------------------------------------------------
+3 Imp Components
+- Kubelet	(Agent)
+- Kube Proxy	(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+- Docker Enginer	(DeamonD)
+
+- cni driver	(APP) -> Container -> Image -> Registry ->Google Clould Registry (GCR)
+
+- kubeadm
+
+
+C. Workstation / Client
+--------------------------------------------------------
+- kubectl
+
+
+===========================================================
+How to create k8 clustor?
+
+Kubelet (Agent)
+Docker Engine (DeamonD)
+Images of ALL COmponents
+Download Pre tools for k8s clustors
+Create all PODs
+Create all Containers
+Assign a IP address to All Pods.
+Setting up certificates and token to each pods/containers.
+Ports specficaition.
+
+===========================================================
+Setup K8s Cluster
+
+HARDWAY https://github.com/kelseyhightower/kubernetes-the-hard-way
+Manual way to setup a k8s Kubeadm
+
+===========================================================
+Dev - ONE VM ONE K8 CLustor
+	ONE master+one worker ONE VM
+			---MINIKUBE
+			https://github.com/kubernetes/minikube
+
+
+Ops- Prod ready clustor
+			---KOPS
+			https://github.com/kubernetes/kops
+AWS
+VMWARE
+OpenStack
+
+===========================================================
+**No need to manage administrator task
+
+AWS - EKS
+https://aws.amazon.com/eks/
+
+Azure - AKS
+https://azure.microsoft.com/en-in/services/kubernetes-service/
+
+GCP - GKE
+https://cloud.google.com/kubernetes-engine/

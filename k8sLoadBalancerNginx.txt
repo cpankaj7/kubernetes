@@ -1,0 +1,43 @@
+Cluster Installation :
+
+HA Control-Plane Installation -- Stacked ETCD
+Step 1 - LB Configuration
+
+Install Nginx
+$sudo yum install epel-release
+$sudo yum install nginx
+
+Disable Selinux
+SELINUX=disabled in the cat /etc/selinux/config and reboot the server
+
+Start Nginx
+sudo systemctl start nginx
+
+Nginx configuration.
+
+Create directory for loadbalancing config.
+mkdir -p /etc/nginx/tcp.conf.d/
+
+Add this directory path to the nginx config file /etc/nginx/nginx.conf
+vi /etc/nginx/nginx.conf
+# including directory for tcp load balancing
+include /etc/nginx/tcp.conf.d/*.conf;
+
+create config for api-server loadbalancing
+vi /etc/nginx/tcp.conf.d/apiserver.conf
+stream {
+        upstream apiserver_read {
+             server 192.168.30.5:6443;                     #--> control plane node 1 ip and kube-api port
+             server 192.168.30.6:6443;                     #--> control plane node 2 ip and kube-api port
+        }
+        server {
+                listen 6443;                               # --> port on which load balancer will listen
+                proxy_pass apiserver_read;
+        }
+}
+Reload the config
+nginx -s reload
+
+Test the proxy
+yum install nc -y
+nc -v LOAD_BALANCER_IP PORT
